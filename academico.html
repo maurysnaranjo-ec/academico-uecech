@@ -209,6 +209,27 @@
         }
     </style>
 
+    <!-- Anti-parpadeo del Portal de Representantes/Estudiantes: si hay una sesión de estudiante
+         guardada, esta regla oculta el encabezado/menú de docentes DESDE ANTES de que el
+         navegador los pinte — sin esto, se alcanzan a ver un instante mientras el JS principal
+         (más abajo) termina de cargar los datos del portal y recién ahí los oculta. -->
+    <style>
+        html.modo-portal-estudiante-cargando header.no-print,
+        html.modo-portal-estudiante-cargando nav.no-print,
+        html.modo-portal-estudiante-cargando main.container {
+            display: none !important;
+        }
+    </style>
+    <script>
+        // Debe ejecutarse ANTES de que el <body> se pinte — por eso va aquí, en <head>, en vez de
+        // esperar al resto del JS de la app (que solo corre después de cargar todo el documento).
+        try {
+            if (sessionStorage.getItem('sesion_portal_estudiante_uecech')) {
+                document.documentElement.classList.add('modo-portal-estudiante-cargando');
+            }
+        } catch (e) { /* si sessionStorage no está disponible, simplemente no se oculta nada */ }
+    </script>
+
     <!-- ═══════════════════════ Rediseño visual 2026 ═══════════════════════
          Refresco estético de toda la interfaz DE TRABAJO (no toca los documentos imprimibles,
          que mantienen su tipografía Georgia institucional). Objetivos: tipografía más cuidada,
@@ -414,8 +435,62 @@
                 <button type="button" onclick="alternarVisibilidadClave('login-clave', this)" tabindex="-1" title="Mostrar/ocultar contraseña" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-700 text-base leading-none px-1 focus:outline-none">👁️</button>
             </div>
             <button id="btn-login" onclick="iniciarLogin()" class="w-full bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg py-3 font-bold tracking-wide transition shadow-lg">Ingresar</button>
+            <button type="button" onclick="mostrarLoginPortalEstudiante()" class="w-full text-center text-xs text-emerald-700 underline mt-4 font-bold">👨‍👩‍👧 ¿Eres estudiante o representante? Ingresa aquí</button>
             <p class="text-[11px] text-slate-400 mt-4 text-center">Sin las credenciales correctas no es posible ver ni modificar ninguna información académica. | UECECH 2026 - 2027 | MMNS</p>
             <p class="text-[10px] text-slate-300 mt-1 text-center">Conectado a la base de datos institucional en la nube</p>
+        </div>
+    </div>
+
+    <!-- ═══════════════ Portal de Representantes/Estudiantes (2026-09-05) ═══════════════
+         Login separado por número de cédula: la primera vez, la cédula sirve también como
+         clave (se fija sola en el primer ingreso exitoso); desde ahí se puede cambiar. Reutiliza
+         el mismo formato de Boletín ya construido para el resto del sistema, para que nunca se
+         desactualice por separado. -->
+    <div id="overlay-login-estudiante" class="hidden fixed inset-0 z-50 flex items-start justify-center pt-10 md:pt-16 overflow-y-auto no-print" style="background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%);">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4 mb-10" style="box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);">
+            <div class="flex justify-center mb-4">
+                <img src="" id="login-est-sello" class="w-20 h-20" alt="Sello institucional" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));">
+            </div>
+            <h1 class="text-lg font-black text-emerald-900 mb-1 text-center leading-snug">PORTAL DE REPRESENTANTES</h1>
+            <p class="text-xs font-bold text-emerald-700 mb-5 text-center" id="login-est-subtitulo-ue">U.E. "CAP. EDMUNDO CHIRIBOGA."</p>
+            <div id="login-est-error" class="hidden text-red-600 text-xs mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Número de Cédula del/de la Estudiante</label>
+            <input id="login-est-cedula" type="text" inputmode="numeric" placeholder="Ej: 0602345678" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 mb-3 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition" onkeydown="if(event.key==='Enter')document.getElementById('login-est-clave').focus()">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Clave</label>
+            <div class="relative mb-2">
+                <input id="login-est-clave" type="password" placeholder="La primera vez, es tu cédula" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 pr-10 outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition" onkeydown="if(event.key==='Enter')iniciarLoginEstudiante()">
+                <button type="button" onclick="alternarVisibilidadClave('login-est-clave', this)" tabindex="-1" title="Mostrar/ocultar contraseña" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-700 text-base leading-none px-1 focus:outline-none">👁️</button>
+            </div>
+            <p class="text-[10px] text-slate-400 mb-5">💡 La primera vez que ingreses, escribe tu número de cédula también como clave — desde ahí se guarda como tu clave.</p>
+            <button id="btn-login-estudiante" onclick="iniciarLoginEstudiante()" class="w-full bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg py-3 font-bold tracking-wide transition shadow-lg">Ingresar</button>
+            <button type="button" onclick="ocultarLoginPortalEstudiante()" class="w-full text-center text-xs text-slate-400 underline mt-4">← Volver</button>
+        </div>
+    </div>
+
+    <!-- Pantalla del portal ya autenticado: barra superior propia + reutiliza tal cual la
+         sección de Boletín (mismo HTML/JS que usan los/las docentes) y un panel de
+         notificaciones. -->
+    <div id="portal-estudiante-barra" class="hidden bg-emerald-900 text-white shadow-md p-4 no-print">
+        <div class="container mx-auto flex flex-wrap justify-between items-center gap-3">
+            <div>
+                <p class="font-black text-sm" id="portal-est-nombre">-</p>
+                <p class="text-[11px] text-emerald-200" id="portal-est-curso">-</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="alternarPanelNotificacionesPortal()" class="relative bg-emerald-800 hover:bg-emerald-700 px-3 py-1.5 rounded text-xs font-bold">
+                    🔔 Notificaciones
+                    <span id="portal-notif-contador" class="hidden absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">0</span>
+                </button>
+                <button onclick="abrirCambiarClavePortalEstudiante()" class="text-xs underline text-emerald-200">🔑 Cambiar clave</button>
+                <button onclick="cerrarSesionPortalEstudiante()" class="text-xs underline text-emerald-200">Cerrar sesión</button>
+            </div>
+        </div>
+        <div id="portal-panel-notificaciones" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-white text-slate-800 rounded-lg shadow-2xl border border-slate-200 p-4 w-full max-w-md max-h-[70vh] overflow-y-auto mx-4">
+            <div class="flex justify-between items-center mb-2">
+                <p class="font-bold text-xs uppercase text-slate-500">Notificaciones</p>
+                <button onclick="alternarPanelNotificacionesPortal()" class="text-slate-400 hover:text-slate-700 text-lg leading-none">×</button>
+            </div>
+            <div id="portal-lista-notificaciones" class="space-y-2 text-sm"></div>
         </div>
     </div>
 
@@ -570,6 +645,9 @@
                 <button id="btn-reporte-completo-excel" onclick="exportarReporteCompletoExcel()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">
                     📊 Descargar Reporte Completo (Excel)
                 </button>
+                <button onclick="abrirModalEnviarNotificacion()" class="bg-sky-700 hover:bg-sky-800 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">
+                    📨 Enviar Notificación
+                </button>
                 <button onclick="abrirCambiarClave()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded text-xs font-bold transition shadow">
                     🔑 Cambiar contraseña
                 </button>
@@ -579,6 +657,27 @@
             </div>
         </div>
     </header>
+
+    <!-- Modal de Enviar Notificación al Portal de Representantes/Estudiantes: cualquier docente
+         asignado al curso activo puede mandar un mensaje a un/a estudiante puntual o a todo el
+         curso; se ve en el Portal de la familia apenas entren. -->
+    <div id="overlay-enviar-notificacion" class="hidden fixed inset-0 z-50 flex items-start justify-center pt-10 md:pt-16 overflow-y-auto bg-black/50 no-print">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4 mb-10">
+            <h3 class="font-black text-slate-800 mb-1">📨 Enviar Notificación</h3>
+            <p class="text-xs text-slate-500 mb-4">Se verá en el Portal de Representantes/Estudiantes del curso activo (<span id="notif-curso-nombre" class="font-bold"></span>).</p>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Destinatario</label>
+            <select id="notif-destinatario" class="w-full p-2 border rounded mb-3 font-medium outline-none focus:ring-2 focus:ring-sky-500">
+                <option value="">Todos los estudiantes del curso</option>
+            </select>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Mensaje</label>
+            <textarea id="notif-mensaje" rows="4" maxlength="2000" placeholder="Escribe aquí el mensaje..." class="w-full p-2 border rounded mb-2 outline-none focus:ring-2 focus:ring-sky-500"></textarea>
+            <div id="notif-error" class="hidden text-red-600 text-xs mb-3 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+            <div class="flex justify-end gap-2">
+                <button onclick="cerrarModalEnviarNotificacion()" class="px-4 py-2 rounded text-xs font-bold text-slate-500 hover:bg-slate-100">Cancelar</button>
+                <button id="btn-confirmar-notificacion" onclick="confirmarEnvioNotificacion()" class="px-4 py-2 rounded text-xs font-bold text-white bg-sky-700 hover:bg-sky-800">Enviar</button>
+            </div>
+        </div>
+    </div>
 
     <nav class="bg-white border-b border-slate-200 shadow-sm no-print relative">
         <div class="container mx-auto flex flex-wrap items-stretch">
@@ -2019,6 +2118,16 @@
                 <h2 class="text-xl font-bold text-slate-700">📑 Boletín del Estudiante (Todas las Asignaturas)</h2>
                 <button id="btn-imprimir-boletin" onclick="imprimirBoletinActual()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-3 py-1.5 rounded text-xs shadow whitespace-nowrap">🖨️ IMPRIMIR / DESCARGAR PDF</button>
             </div>
+            <div id="bloque-visibilidad-boletin-portal" class="hidden no-print flex items-center justify-between gap-3 bg-sky-50 border border-sky-200 rounded-lg p-3 mb-4">
+                <div>
+                    <p class="text-xs font-bold text-sky-900">👨‍👩‍👧 Portal de Representantes/Estudiantes</p>
+                    <p class="text-[11px] text-sky-700">Si lo habilitas, las familias de este curso podrán entrar con la cédula del/de la estudiante y ver este mismo Boletín.</p>
+                </div>
+                <label class="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                    <input type="checkbox" id="chk-visibilidad-boletin-portal" onchange="guardarVisibilidadBoletinPortalUI()" class="w-5 h-5 accent-emerald-600">
+                    <span class="text-xs font-bold text-sky-900">Habilitar</span>
+                </label>
+            </div>
             <div class="flex flex-wrap justify-end items-center border-b pb-2 mb-4 gap-2 no-print">
                 <div class="flex flex-wrap items-end gap-2">
                     <select id="sel-boletin-periodo" onchange="refrescarVistaBoletines()" class="p-1.5 border rounded font-bold text-xs bg-slate-50">
@@ -2532,6 +2641,21 @@
 
         // ─────────────────────────── Arranque / restauración de sesión ───────────────────────────
         async function intentarRestaurarSesion() {
+            // Portal de Representantes/Estudiantes: sesión completamente aparte de la de
+            // docentes/admin (otra clave de sessionStorage), se revisa primero.
+            const guardadaEst = sessionStorage.getItem('sesion_portal_estudiante_uecech');
+            if (guardadaEst) {
+                try {
+                    sesionEstudiantePortal = JSON.parse(guardadaEst);
+                    await cargarPortalEstudiante();
+                    return;
+                } catch (e) {
+                    sesionEstudiantePortal = null;
+                    sessionStorage.removeItem('sesion_portal_estudiante_uecech');
+                    document.documentElement.classList.remove('modo-portal-estudiante-cargando');
+                }
+            }
+
             const guardada = sessionStorage.getItem('sesion_academico_uecech');
             if (guardada) {
                 try {
@@ -2571,6 +2695,214 @@
             }
         }
 
+        // ═══════════════════════ Portal de Representantes/Estudiantes ═══════════════════════
+        // Reutiliza el mismo formato de Boletín (sec-boletines) ya construido para toda la app —
+        // no se duplica esa lógica en ningún lado — pero en modo de SOLO LECTURA de un único
+        // estudiante, con su propia sesión (por cédula, no por usuario/clave de docente).
+        let sesionEstudiantePortal = null; // { token, idEstudiante, nombre, idCurso }
+        let cursoPortalEstudianteActivo = null;
+
+        function mostrarLoginPortalEstudiante() {
+            document.getElementById('overlay-login').classList.add('hidden');
+            document.getElementById('overlay-login-estudiante').classList.remove('hidden');
+            const sello = document.getElementById('login-est-sello');
+            if (sello && typeof LOGO_INSTITUCIONAL_B64 !== 'undefined') sello.src = LOGO_INSTITUCIONAL_B64;
+        }
+        function ocultarLoginPortalEstudiante() {
+            document.getElementById('overlay-login-estudiante').classList.add('hidden');
+            document.getElementById('overlay-login').classList.remove('hidden');
+        }
+
+        async function iniciarLoginEstudiante() {
+            const cedula = document.getElementById('login-est-cedula').value.trim();
+            const clave = document.getElementById('login-est-clave').value;
+            const errBox = document.getElementById('login-est-error');
+            errBox.classList.add('hidden');
+            if (!cedula || !clave) {
+                errBox.textContent = 'Ingresa la cédula y la clave.';
+                errBox.classList.remove('hidden');
+                return;
+            }
+            const boton = document.getElementById('btn-login-estudiante');
+            boton.disabled = true; boton.textContent = 'Ingresando...';
+            try {
+                const resp = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ accion: 'loginEstudiante', cedula, clave })
+                });
+                let json;
+                try { json = await resp.json(); }
+                catch (e) { throw new Error('No se pudo contactar al servidor. Revisa tu conexión.'); }
+                if (!json.ok) throw new Error(json.error || 'Error desconocido del servidor.');
+                sesionEstudiantePortal = json.datos;
+                sessionStorage.setItem('sesion_portal_estudiante_uecech', JSON.stringify(sesionEstudiantePortal));
+                document.getElementById('overlay-login-estudiante').classList.add('hidden');
+                await cargarPortalEstudiante();
+            } catch (e) {
+                errBox.textContent = e.message;
+                errBox.classList.remove('hidden');
+            } finally {
+                boton.disabled = false; boton.textContent = 'Ingresar';
+            }
+        }
+
+        // Llama a una acción del portal (usa el token de estudiante, NO el de docente/admin —
+        // por eso no reutiliza llamarAPI tal cual, que siempre manda sesionActual.token). Mismo
+        // formato de respuesta del backend que llamarAPI: { ok, datos, error }.
+        async function llamarAPIPortalEstudiante(accion, extra) {
+            const payload = Object.assign({ accion }, extra || {});
+            if (sesionEstudiantePortal && sesionEstudiantePortal.token) payload.token = sesionEstudiantePortal.token;
+            const resp = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            let json;
+            try { json = await resp.json(); }
+            catch (e) { throw new Error('No se pudo contactar al servidor. Revisa tu conexión.'); }
+            if (!json.ok) throw new Error(json.error || 'Error desconocido del servidor.');
+            return json.datos;
+        }
+
+        // Arma el mismo objeto "curso" que espera todo el motor de Boletines ya existente
+        // (calcularDatosAsignaturasBoletin, renderizarBoletinEstudiante...), pero para un/a
+        // único/a estudiante: asignatura se deja vacía a propósito, para que TODAS las materias
+        // se lean por la vía de "otrasMaterias" (la del/de la estudiante nunca es "propia" de
+        // nadie en este contexto) — es el mismo mecanismo que ya usa el Registro Interdisciplinar.
+        function construirCursoPortalEstudiante(datosNube, catalogo, miEstudiante) {
+            const nivel = obtenerNivelAcademico(catalogo.grado) || { materias: [] };
+            const nucleo = datosNube.nucleo || {};
+            const materiasGenericas = datosNube.materias || {};
+            const otrasMateriasNivel = { [miEstudiante.id]: {} };
+
+            (nivel.materias || []).forEach((nombreMat, i) => {
+                const datosMat = materiasGenericas[nombreMat] && materiasGenericas[nombreMat][miEstudiante.id];
+                otrasMateriasNivel[miEstudiante.id][`asig_${i}`] = nombreMat === 'OVP'
+                    ? { ...obtenerCodigosOVPDesdeMatriz(datosMat), supletorio: '' }
+                    : esMateriaCualitativaPorNombre(nombreMat)
+                        ? (datosMat || { t1: {}, t2: {}, t3: {} })
+                        : (datosMat ? { t1: notaFinalDesdeValorGuardado(datosMat.t1), t2: notaFinalDesdeValorGuardado(datosMat.t2), t3: notaFinalDesdeValorGuardado(datosMat.t3), supletorio: datosMat.supletorio || '' } : { t1: '', t2: '', t3: '', supletorio: '' });
+            });
+
+            return {
+                id: catalogo.idCurso, label: catalogo.grado, paralelo: catalogo.paralelo,
+                asignatura: '', // a propósito: fuerza que TODO se lea de otrasMaterias, nunca "propia"
+                esAcompanamiento: false, modeloPorAsignatura: true,
+                estudiantes: [miEstudiante],
+                calificaciones: {}, matrizOVP: {}, calificacionesAmbitos: {},
+                conducta: nucleo.conducta || {},
+                asistenciaDiaria: datosNube.asistenciaDiaria || {},
+                otrasMaterias: otrasMateriasNivel,
+                nombresAsignaturasNivel: nivel.materias || [],
+                supletorios: {}, textosRefuerzo: {}, informesNEE: {}
+            };
+        }
+
+        async function cargarPortalEstudiante() {
+            const contexto = await llamarAPIPortalEstudiante('obtenerContextoPortalEstudiante', {});
+            const catalogo = (contexto.cursos || [])[0];
+            if (!catalogo) {
+                alert('No se encontró tu curso. Contacta a tu institución.');
+                cerrarSesionPortalEstudiante();
+                return;
+            }
+            const config = contexto.config || {};
+            db.configGeneral.ue = config.ue || '';
+            db.configGeneral.amie = config.amie || '';
+            db.configGeneral.vicerrectorMatutino = { nombre: config.vicerrectorMatNombre || config.vicerrector || '', celular: config.vicerrectorMatCelular || '', correo: config.vicerrectorMatCorreo || '' };
+            db.configGeneral.vicerrectorVespertino = { nombre: config.vicerrectorVespNombre || '', celular: config.vicerrectorVespCelular || '', correo: config.vicerrectorVespCorreo || '' };
+            db.configGeneral.anioLectivo = config.anioLectivo || '';
+            db.configGeneral.docente = ''; // el Boletín no necesita mostrar un/a docente puntual aquí
+
+            if (!contexto.boletinHabilitado) {
+                mostrarPantallaPortalEstudiante(catalogo, null);
+                document.getElementById('boletin-impresion-area').innerHTML = '<p class="text-center text-slate-400 py-10">📋 El Boletín de calificaciones todavía no está habilitado para consulta. Tu docente de acompañamiento debe activarlo primero.</p>';
+                cargarNotificacionesPortal(); // las notificaciones se ven siempre, aunque el Boletín no esté habilitado
+                return;
+            }
+
+            const datosNube = await llamarAPIPortalEstudiante('obtenerCursoPortalEstudiante', {});
+            const miEstudiante = { id: sesionEstudiantePortal.idEstudiante, nombre: sesionEstudiantePortal.nombre, nee: 'Ninguna', cedula: '' };
+            // La condición NEE y la cédula reales sí importan para el Boletín (encabezado /
+            // observaciones) — se buscan en la nómina que ya viene dentro del núcleo.
+            const estCompleto = (datosNube.nucleo && datosNube.nucleo.estudiantes || []).find(e => e.id === miEstudiante.id);
+            if (estCompleto) Object.assign(miEstudiante, estCompleto);
+
+            cursoPortalEstudianteActivo = construirCursoPortalEstudiante(datosNube, catalogo, miEstudiante);
+            db.cursos = [cursoPortalEstudianteActivo];
+            db.cursoActivoIndex = 0;
+
+            mostrarPantallaPortalEstudiante(catalogo, miEstudiante);
+
+            const selEst = document.getElementById('sel-boletin-estudiante');
+            selEst.innerHTML = `<option value="${miEstudiante.id}">${miEstudiante.nombre}</option>`;
+            selEst.disabled = true;
+            document.getElementById('sel-boletin-modo').value = 'individual';
+            document.getElementById('sel-boletin-modo').disabled = true;
+            refrescarVistaBoletines();
+
+            cargarNotificacionesPortal();
+        }
+
+        // Muestra la pantalla del portal ya autenticado: oculta TODA la navegación/menús propios
+        // de docentes/admin, y deja visible únicamente la sección de Boletín — ocultando además,
+        // dentro de ella, los controles que solo tienen sentido para un/a docente viendo a
+        // varios/as estudiantes (selector de modo, casillas de boletín múltiple).
+        function mostrarPantallaPortalEstudiante(catalogo, miEstudiante) {
+            document.documentElement.classList.remove('modo-portal-estudiante-cargando');
+            document.getElementById('overlay-login').classList.add('hidden');
+            document.getElementById('overlay-login-estudiante').classList.add('hidden');
+            document.getElementById('overlay-selector-curso').classList.add('hidden');
+            const header = document.querySelector('header.no-print');
+            const nav = document.querySelector('nav.no-print');
+            if (header) header.classList.add('hidden');
+            if (nav) nav.classList.add('hidden');
+            document.querySelectorAll('.tab-content').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById('sec-boletines').classList.remove('hidden');
+
+            document.getElementById('portal-estudiante-barra').classList.remove('hidden');
+            document.getElementById('portal-est-nombre').innerText = miEstudiante ? miEstudiante.nombre : (sesionEstudiantePortal && sesionEstudiantePortal.nombre) || '-';
+            document.getElementById('portal-est-curso').innerText = catalogo ? (catalogo.nombreVisible || `${catalogo.grado} "${catalogo.paralelo}"`) : '-';
+
+            // Controles que solo tienen sentido para un/a docente viendo a todo el curso.
+            const contModo = document.getElementById('sel-boletin-modo')?.closest('div');
+            if (contModo) contModo.classList.add('hidden');
+            document.getElementById('contenedor-checkboxes-multiple')?.classList.add('hidden');
+        }
+
+        function cerrarSesionPortalEstudiante() {
+            sesionEstudiantePortal = null;
+            cursoPortalEstudianteActivo = null;
+            sessionStorage.removeItem('sesion_portal_estudiante_uecech');
+            location.reload();
+        }
+
+        function alternarPanelNotificacionesPortal() {
+            document.getElementById('portal-panel-notificaciones').classList.toggle('hidden');
+        }
+
+        async function cargarNotificacionesPortal() {
+            try {
+                const lista = await llamarAPIPortalEstudiante('listarNotificacionesEstudiante', {});
+                const cont = document.getElementById('portal-notif-contador');
+                if (lista.length > 0) { cont.classList.remove('hidden'); cont.innerText = lista.length; }
+                else cont.classList.add('hidden');
+                const contenedor = document.getElementById('portal-lista-notificaciones');
+                contenedor.innerHTML = lista.length === 0
+                    ? '<p class="text-slate-400 text-xs text-center py-2">No tienes notificaciones.</p>'
+                    : lista.map(n => `
+                        <div class="border rounded-lg p-2 bg-slate-50">
+                            <p class="text-slate-800">${n.mensaje}</p>
+                            <p class="text-[10px] text-slate-400 mt-1">${new Date(n.fecha).toLocaleString('es-EC')} · ${n.materia || 'Institucional'} · ${n.autor || ''}</p>
+                        </div>`).join('');
+            } catch (e) { /* silencioso: no bloquea el resto del portal */ }
+        }
+
+        function abrirCambiarClavePortalEstudiante() {
+            abrirCambiarClave(true);
+        }
+
         async function cerrarSesionNube() {
             // Si había una nota recién digitada (guardado programado, aún no enviado), se fuerza a
             // que termine de guardarse ANTES de cerrar sesión — así nunca se pierde el último cambio.
@@ -2591,7 +2923,12 @@
         }
 
         // ─────────────────────────── Cambiar mi contraseña (cualquier rol, incluido admin) ───────────────────────────
-        function abrirCambiarClave() {
+        // 'modoCambiarClaveEsPortalEstudiante' hace que este MISMO modal sirva también para el
+        // Portal de Representantes/Estudiantes (llama a una acción distinta del backend) — se
+        // reinicia a false cada vez que se abre desde el flujo normal de docente/admin.
+        let modoCambiarClaveEsPortalEstudiante = false;
+        function abrirCambiarClave(esPortalEstudiante) {
+            modoCambiarClaveEsPortalEstudiante = !!esPortalEstudiante;
             document.getElementById('clave-actual').value = '';
             document.getElementById('clave-nueva').value = '';
             document.getElementById('clave-nueva-repetir').value = '';
@@ -2620,7 +2957,11 @@
                 return;
             }
             try {
-                await llamarAPI('cambiarMiClave', { claveActual: actual, claveNueva: nueva });
+                if (modoCambiarClaveEsPortalEstudiante) {
+                    await llamarAPIPortalEstudiante('cambiarMiClaveEstudiante', { claveActual: actual, claveNueva: nueva });
+                } else {
+                    await llamarAPI('cambiarMiClave', { claveActual: actual, claveNueva: nueva });
+                }
                 cerrarCambiarClave();
                 alert('Tu contraseña se cambió correctamente. Úsala la próxima vez que inicies sesión.');
             } catch (e) {
@@ -2978,6 +3319,7 @@
                 Object.assign(slot, {
                     esAcompanamiento: true, // habilita el mismo set de pestañas de "aula" que el modelo clásico
                     docenteOVP: nucleo.docenteOVP || '',
+                    boletinVisiblePortal: !!nucleo.boletinVisiblePortal,
                     conducta: nucleo.conducta || {}, asistenciaDiaria: datosNube.asistenciaDiaria || {}, horarios: datosNube.horarios || {}, ovp: nucleo.ovp || {},
                     otrasMaterias: otrasMateriasNivel,
                     nombresAsignaturasNivel: nivelDeEsteCurso.materias || [], // para que Registro Interdisciplinar arme las columnas dinámicamente
@@ -3092,6 +3434,7 @@
                     anio: nucleo.anio || '', jornada: nucleo.jornada || '',
                     esAcompanamiento: true, modeloPorAsignatura: true,
                     docenteOVP: nucleo.docenteOVP || '',
+                    boletinVisiblePortal: !!nucleo.boletinVisiblePortal,
                     estudiantes: estudiantesNucleo,
                     calificaciones: {}, supletorios: {},
                     conducta: nucleo.conducta || {}, asistenciaDiaria: datosNube.asistenciaDiaria || {}, horarios: datosNube.horarios || {}, ovp: nucleo.ovp || {},
@@ -8187,6 +8530,27 @@ ${estilosHtml}
             }
         }
 
+        // Si un/a estudiante olvida su clave del Portal de Representantes, el/la docente de
+        // acompañamiento (o admin) puede borrarla desde aquí — vuelve a servir su cédula como
+        // clave la próxima vez que entre. Se llama directo al backend (no pasa por el guardado
+        // debounced de salvar()) porque afecta un dato muy puntual; luego se actualiza también la
+        // copia local en memoria, para que un guardado pendiente de guardarNucleo no la revierta
+        // sin querer mandando de vuelta el hash viejo.
+        async function restablecerClavePortalEstudiante(estId, nombreEst) {
+            if(!puedeEditarNomina()) { alert('Solo el/la docente de acompañamiento o el administrador pueden restablecer la clave del Portal.'); return; }
+            if(!await mostrarModalConfirmacion(`¿Restablecer la clave del Portal de ${nombreEst}? Su cédula volverá a servir como clave la próxima vez que ingrese.`, 'Restablecer')) return;
+            try {
+                await llamarAPI('restablecerClaveEstudiante', { idCurso: idCursoActivoNube, estudianteId: estId });
+                const c = db.cursos[db.cursoActivoIndex];
+                const est = c.estudiantes.find(e => e.id === estId);
+                if (est) { delete est.claveHash; delete est.claveSal; }
+                renderizarTodo();
+                alert('Clave restablecida. Ya puede volver a ingresar con su cédula.');
+            } catch (e) {
+                alert('No se pudo restablecer la clave: ' + e.message);
+            }
+        }
+
         function obtenerEquivalenciaRGLOEI(nota) {
             if (nota === null || nota === undefined || nota === '' || isNaN(nota)) return { sigla: '-', desc: '-' };
             const n = parseFloat(nota);
@@ -8453,7 +8817,11 @@ ${estilosHtml}
                                     <option value="Grado 3" ${e.nee==='Grado 3'?'selected':''}>Grado 3</option>
                                 </select>
                             </td>
-                            <td class="p-2 text-center no-print"><button onclick="eliminarEstudiante('${e.id}')" class="text-red-600 hover:underline font-bold">🗑️ Quitar</button></td>
+                            <td class="p-2 text-center no-print">
+                                <button onclick="eliminarEstudiante('${e.id}')" class="text-red-600 hover:underline font-bold">🗑️ Quitar</button>
+                                <br>
+                                <button onclick="restablecerClavePortalEstudiante('${e.id}', '${(e.nombre||'').replace(/'/g,"\\'")}')" class="text-amber-600 hover:underline font-bold text-[11px]" title="Si olvidó su clave del Portal de Representantes, esto la borra para que vuelva a servir su cédula">🔑 ${e.claveHash ? 'Restablecer clave' : 'Sin clave propia aún'}</button>
+                            </td>
                         </tr>`;
                     } else {
                         tbodyEst.innerHTML += `
@@ -11177,6 +11545,76 @@ ${estilosHtml}
             }
 
             document.getElementById('boletin-impresion-area').innerHTML = '<p class="text-slate-400 text-center py-4">Seleccione un alumno y el periodo para proyectar su boletín.</p>';
+
+            // Interruptor de Portal de Representantes/Estudiantes: solo lo ve y lo puede tocar
+            // quien tiene permiso de escritura del núcleo de este curso (docente de acompañamiento
+            // o admin) — para cualquier otra materia especialista, se mantiene oculto.
+            const bloqueVisibilidad = document.getElementById('bloque-visibilidad-boletin-portal');
+            if (bloqueVisibilidad) {
+                const puedeControlar = !!(curso.esAcompanamiento && curso.modeloPorAsignatura);
+                bloqueVisibilidad.classList.toggle('hidden', !puedeControlar);
+                if (puedeControlar) {
+                    document.getElementById('chk-visibilidad-boletin-portal').checked = !!curso.boletinVisiblePortal;
+                }
+            }
+        }
+
+        // ─────────────────────── Enviar Notificación (cualquier docente, curso activo) ───────────────────────
+        function abrirModalEnviarNotificacion() {
+            const curso = db.cursos[db.cursoActivoIndex];
+            if (!curso || !curso.label) { alert('Selecciona primero un curso activo.'); return; }
+            document.getElementById('notif-curso-nombre').innerText = (curso.label && curso.paralelo) ? `${curso.label} "${curso.paralelo}"` : 'Sin Configurar';
+            const sel = document.getElementById('notif-destinatario');
+            sel.innerHTML = '<option value="">Todos los estudiantes del curso</option>';
+            curso.estudiantes.sort((a,b)=>a.nombre.localeCompare(b.nombre)).forEach(e => {
+                sel.innerHTML += `<option value="${e.id}">${e.nombre}</option>`;
+            });
+            document.getElementById('notif-mensaje').value = '';
+            document.getElementById('notif-error').classList.add('hidden');
+            document.getElementById('overlay-enviar-notificacion').classList.remove('hidden');
+        }
+        function cerrarModalEnviarNotificacion() {
+            document.getElementById('overlay-enviar-notificacion').classList.add('hidden');
+        }
+        async function confirmarEnvioNotificacion() {
+            const mensaje = document.getElementById('notif-mensaje').value.trim();
+            const estudianteId = document.getElementById('notif-destinatario').value;
+            const errBox = document.getElementById('notif-error');
+            errBox.classList.add('hidden');
+            if (!mensaje) {
+                errBox.textContent = 'Escribe un mensaje antes de enviar.';
+                errBox.classList.remove('hidden');
+                return;
+            }
+            const boton = document.getElementById('btn-confirmar-notificacion');
+            boton.disabled = true; boton.textContent = 'Enviando...';
+            try {
+                await llamarAPI('enviarNotificacion', { idCurso: idCursoActivoNube, estudianteId, mensaje, materia: (db.cursos[db.cursoActivoIndex] || {}).asignatura || '' });
+                cerrarModalEnviarNotificacion();
+                alert('Notificación enviada.');
+            } catch (e) {
+                errBox.textContent = e.message;
+                errBox.classList.remove('hidden');
+            } finally {
+                boton.disabled = false; boton.textContent = 'Enviar';
+            }
+        }
+
+        async function guardarVisibilidadBoletinPortalUI() {
+            const curso = db.cursos[db.cursoActivoIndex];
+            const chk = document.getElementById('chk-visibilidad-boletin-portal');
+            const habilitado = chk.checked;
+            chk.disabled = true;
+            try {
+                await llamarAPI('guardarVisibilidadBoletinPortal', { idCurso: idCursoActivoNube, habilitado });
+                curso.boletinVisiblePortal = habilitado;
+                marcarGuardadoOk();
+            } catch (e) {
+                chk.checked = !habilitado; // revierte visualmente si falló
+                marcarGuardadoError(e.message);
+            } finally {
+                chk.disabled = false;
+            }
         }
 
         function cambiarModoBoletines() {
@@ -11497,7 +11935,8 @@ ${estilosHtml}
                 t1: 'Informe de Progreso de Aprendizaje - 1er Trimestre',
                 t2: 'Informe de Progreso de Aprendizaje - 2do Trimestre',
                 t3: 'Informe de Progreso de Aprendizaje - 3er Trimestre',
-                anual: 'Informe de Progreso de Aprendizaje - Resumen Anual'
+                anual: 'Informe de Progreso de Aprendizaje - Resumen Anual',
+                supletorio: 'Informe de Progreso de Aprendizaje - Anual (luego del Supletorio)'
             };
 
             // --- Bloque 1: Resumen de todas las asignaturas (propia + 12 externas) para el periodo elegido ---
@@ -11716,7 +12155,7 @@ ${estilosHtml}
 
             const selPeriodo = document.getElementById('sel-boletin-periodo');
             const periodo = selPeriodo ? selPeriodo.value : 'anual';
-            const etiquetasPeriodoCorta = { t1: '1er Trimestre', t2: '2do Trimestre', t3: '3er Trimestre', anual: 'Resumen Anual' };
+            const etiquetasPeriodoCorta = { t1: '1er Trimestre', t2: '2do Trimestre', t3: '3er Trimestre', anual: 'Resumen Anual', supletorio: 'Anual (luego del Supletorio)' };
 
             const { filasAsignaturas, promedioGeneral, esAnual } = calcularDatosAsignaturasBoletin(curso, estId, periodo);
 
