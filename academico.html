@@ -566,6 +566,8 @@
             <div class="grid grid-cols-2 gap-2 text-sm">
                 <input id="admin-nuevo-usuario" placeholder="usuario (ej. jperez)" class="border rounded px-2 py-1.5">
                 <input id="admin-nuevo-nombre" placeholder="nombre completo" class="border rounded px-2 py-1.5">
+                <input id="admin-nuevo-celular" placeholder="celular (opcional)" class="border rounded px-2 py-1.5">
+                <input id="admin-nuevo-correo" type="email" placeholder="correo (opcional)" class="border rounded px-2 py-1.5">
                 <input id="admin-nuevo-clave" placeholder="clave inicial" class="border rounded px-2 py-1.5">
                 <select id="admin-nuevo-rol" class="border rounded px-2 py-1.5" onchange="actualizarCamposAdminSegunRol()">
                     <option value="acompanamiento">Docente de acompañamiento (2do-7mo EGB, varias asignaturas)</option>
@@ -735,15 +737,15 @@
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nombre del Docente</label>
-                    <input type="text" id="cfg-docente" oninput="guardarDatosGenerales()" placeholder="Ej: Mgs. Nombre Apellido" class="w-full p-2 border rounded font-medium outline-none focus:ring-2 focus:ring-emerald-500">
+                    <input type="text" id="cfg-docente" oninput="guardarMisDatosDocente()" placeholder="Ej: Mgs. Nombre Apellido" class="w-full p-2 border rounded font-medium outline-none focus:ring-2 focus:ring-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nro. Celular del Docente</label>
-                    <input type="text" id="cfg-docente-celular" oninput="guardarDatosGenerales()" placeholder="Ej: 0991234567" class="w-full p-2 border rounded font-medium outline-none focus:ring-2 focus:ring-emerald-500">
+                    <input type="text" id="cfg-docente-celular" oninput="guardarMisDatosDocente()" placeholder="Ej: 0991234567" class="w-full p-2 border rounded font-medium outline-none focus:ring-2 focus:ring-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Correo Electrónico del Docente</label>
-                    <input type="email" id="cfg-docente-correo" oninput="guardarDatosGenerales()" placeholder="Ej: docente@educacion.gob.ec" class="w-full p-2 border rounded font-medium outline-none focus:ring-2 focus:ring-emerald-500">
+                    <input type="email" id="cfg-docente-correo" oninput="guardarMisDatosDocente()" placeholder="Ej: docente@educacion.gob.ec" class="w-full p-2 border rounded font-medium outline-none focus:ring-2 focus:ring-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-emerald-700 uppercase mb-1">Vicerrector/a Matutina — Nombre (Inicial a 10mo EGB)</label>
@@ -2380,7 +2382,7 @@
     </main>
 
     <footer class="bg-slate-800 text-slate-400 text-center py-2 text-xs no-print border-t border-slate-700">
-        <p>Sistema Académico Acad - UECECH • Estudio, Trabajo y Disciplina  • Derechos Reservados 2026: Mauricio M. Naranjo S. </p>
+        <p>Sistema Académico Elemental y Media (2do a 7mo EGB) • RGLOEI 2026</p>
     </footer>
 
     <script>
@@ -2813,7 +2815,10 @@
             db.configGeneral.vicerrectorMatutino = { nombre: config.vicerrectorMatNombre || config.vicerrector || '', celular: config.vicerrectorMatCelular || '', correo: config.vicerrectorMatCorreo || '' };
             db.configGeneral.vicerrectorVespertino = { nombre: config.vicerrectorVespNombre || '', celular: config.vicerrectorVespCelular || '', correo: config.vicerrectorVespCorreo || '' };
             db.configGeneral.anioLectivo = config.anioLectivo || '';
-            db.configGeneral.docente = ''; // el Boletín no necesita mostrar un/a docente puntual aquí
+            // El Boletín firma al pie con el nombre del/de la Docente de Acompañamiento del curso
+            // (no hay una sesión de docente de la cual tomarlo, como sí ocurre cuando lo ve un/a
+            // docente) — viene aparte, ya resuelto por el backend (ver obtenerContextoPortalEstudiante).
+            db.configGeneral.docente = contexto.docenteAcompanamiento || '';
 
             if (!contexto.boletinHabilitado) {
                 mostrarPantallaPortalEstudiante(catalogo, null);
@@ -2908,11 +2913,12 @@
             // que termine de guardarse ANTES de cerrar sesión — así nunca se pierde el último cambio.
             // Esto cubre TANTO el guardado general (calificaciones/núcleo) COMO la asistencia diaria y
             // los horarios, que se guardan por su cuenta con su propio temporizador independiente.
-            if (temporizadorGuardadoNube || temporizadorAsistenciaDiaria || temporizadorHorario) {
+            if (temporizadorGuardadoNube || temporizadorAsistenciaDiaria || temporizadorHorario || temporizadorGuardadoDocente) {
                 document.querySelectorAll('[onclick="cerrarSesionNube()"]').forEach(b => { b.disabled = true; b.dataset.textoOriginal = b.innerText; b.innerText = '⏳ Guardando...'; });
                 await guardarInmediatoNube();
                 await guardarInmediatoAsistenciaDiaria();
                 await guardarInmediatoHorario();
+                if (temporizadorGuardadoDocente) await guardarMisDatosDocenteInmediato();
             }
             try { await llamarAPI('cerrarSesion', {}); } catch (e) { /* no crítico */ }
             sesionActual = null;
@@ -2996,6 +3002,8 @@
             db.configGeneral.anioLectivo = config.anioLectivo || '';
             db.configGeneral.feriados = Array.isArray(config.feriados) ? config.feriados : [];
             db.configGeneral.docente = sesionActual.nombre || '';
+            db.configGeneral.docenteCelular = sesionActual.celular || '';
+            db.configGeneral.docenteCorreo = sesionActual.correo || '';
             document.getElementById('overlay-login').classList.add('hidden');
 
             // Un/a docente por asignatura (Básica Superior/Bachillerato) con VARIOS cursos asignados
@@ -3848,6 +3856,8 @@
             document.getElementById('admin-nuevo-usuario').value = u.usuario;
             document.getElementById('admin-nuevo-usuario').disabled = true;
             document.getElementById('admin-nuevo-nombre').value = u.nombre || '';
+            document.getElementById('admin-nuevo-celular').value = u.celular || '';
+            document.getElementById('admin-nuevo-correo').value = u.correo || '';
             document.getElementById('admin-nuevo-clave').value = '';
             document.getElementById('admin-nuevo-clave').placeholder = 'nueva clave (dejar en blanco para no cambiarla)';
             document.getElementById('admin-nuevo-rol').value = u.rol || 'acompanamiento';
@@ -3868,7 +3878,7 @@
         function cancelarEdicionUsuarioAdmin() {
             usuarioEnEdicion = null;
             document.getElementById('admin-nuevo-usuario').disabled = false;
-            ['admin-nuevo-usuario', 'admin-nuevo-nombre', 'admin-nuevo-clave', 'admin-nuevo-cursos'].forEach(id => document.getElementById(id).value = '');
+            ['admin-nuevo-usuario', 'admin-nuevo-nombre', 'admin-nuevo-celular', 'admin-nuevo-correo', 'admin-nuevo-clave', 'admin-nuevo-cursos'].forEach(id => document.getElementById(id).value = '');
             document.getElementById('admin-nuevo-clave').placeholder = 'clave inicial';
             document.getElementById('admin-nuevo-rol').value = 'acompanamiento';
             document.getElementById('admin-nuevo-nivel').value = 'elemental_media';
@@ -3921,6 +3931,8 @@
                 const editado = {
                     usuario: usuarioEnEdicion.usuario,
                     nombre: document.getElementById('admin-nuevo-nombre').value.trim(),
+                    celular: document.getElementById('admin-nuevo-celular').value.trim(),
+                    correo: document.getElementById('admin-nuevo-correo').value.trim(),
                     rol: rol,
                     materia: document.getElementById('admin-nuevo-materia').value,
                     nivelAcademico: nivelAcademico,
@@ -3946,6 +3958,8 @@
             const nuevo = {
                 usuario: document.getElementById('admin-nuevo-usuario').value.trim(),
                 nombre: document.getElementById('admin-nuevo-nombre').value.trim(),
+                celular: document.getElementById('admin-nuevo-celular').value.trim(),
+                correo: document.getElementById('admin-nuevo-correo').value.trim(),
                 clave: document.getElementById('admin-nuevo-clave').value,
                 rol: rol,
                 materia: document.getElementById('admin-nuevo-materia').value,
@@ -3963,7 +3977,7 @@
                 await llamarAPI('crearUsuario', { usuarioNuevo: nuevo });
                 msg.textContent = 'Usuario creado correctamente.';
                 msg.className = 'text-xs mt-2 text-emerald-600';
-                ['admin-nuevo-usuario', 'admin-nuevo-nombre', 'admin-nuevo-clave', 'admin-nuevo-cursos'].forEach(id => document.getElementById(id).value = '');
+                ['admin-nuevo-usuario', 'admin-nuevo-nombre', 'admin-nuevo-celular', 'admin-nuevo-correo', 'admin-nuevo-clave', 'admin-nuevo-cursos'].forEach(id => document.getElementById(id).value = '');
                 actualizarSelectorCursoAcompanamientoAdmin();
                 await refrescarListaUsuariosAdmin();
             } catch (e) {
@@ -7128,11 +7142,37 @@ ${estilosHtml}
             if (campo === 'esAcompanamiento') renderizarPestañaConfiguracionCursos();
         }
 
-        function guardarDatosGenerales() {
+        // Guarda el nombre/celular/correo del/de la docente actualmente logueado/a — funciona para
+        // CUALQUIER rol (no solo admin, no requiere ser docente de acompañamiento de ningún curso):
+        // es autoservicio sobre su PROPIA cuenta (ver guardarMisDatosContacto en el backend), con su
+        // propio candado corto — así nunca compite con el guardado de calificaciones/núcleo de otros
+        // 119 docentes, que era la causa del error "El sistema está muy ocupado...".
+        let temporizadorGuardadoDocente = null;
+        function guardarMisDatosDocente() {
             db.configGeneral.docente = document.getElementById('cfg-docente').value;
             db.configGeneral.docenteCelular = document.getElementById('cfg-docente-celular').value;
             db.configGeneral.docenteCorreo = document.getElementById('cfg-docente-correo').value;
+            actualizarHeaderNombres();
+            marcarPendienteDeGuardar();
+            if (temporizadorGuardadoDocente) clearTimeout(temporizadorGuardadoDocente);
+            temporizadorGuardadoDocente = setTimeout(guardarMisDatosDocenteInmediato, 1200);
+        }
+        async function guardarMisDatosDocenteInmediato() {
+            if (temporizadorGuardadoDocente) { clearTimeout(temporizadorGuardadoDocente); temporizadorGuardadoDocente = null; }
+            try {
+                const resultado = await llamarAPI('guardarMisDatosContacto', {
+                    nombre: db.configGeneral.docente,
+                    celular: db.configGeneral.docenteCelular,
+                    correo: db.configGeneral.docenteCorreo
+                });
+                if (sesionActual && resultado && resultado.nombre) sesionActual.nombre = resultado.nombre;
+                marcarGuardadoOk();
+            } catch (e) {
+                marcarGuardadoError(e.message);
+            }
+        }
 
+        function guardarDatosGenerales() {
             if (sesionActual && sesionActual.rol === 'admin') {
                 db.configGeneral.ue = document.getElementById('cfg-ue').value;
                 db.configGeneral.vicerrectorMatutino = {
@@ -7163,7 +7203,6 @@ ${estilosHtml}
                     }
                 }).then(() => marcarGuardadoOk()).catch(e => marcarGuardadoError(e.message));
             }
-            salvar();
             actualizarHeaderNombres();
         }
 
